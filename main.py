@@ -163,8 +163,7 @@ if selected == 'Original Dataset':
 
 if selected == 'Processed Dataset':
     st.title('Processed Dataset')
-    st.write(
-        'This page show the step-by-step process of data preparation. It includes the visualization of the outcome.')
+    st.write('This page show the step-by-step process of data preparation. It includes the visualization of the outcome.')
     st.dataframe(df_processed)
     processed_data_page_option = st.radio('', ('Data exploration + processing', 'Visualization'), horizontal=True)
     if processed_data_page_option == 'Data exploration + processing':
@@ -259,3 +258,97 @@ if selected == 'Processed Dataset':
         ax.set_ylabel('Number of Reported Cases')
         ax.set_xticklabels(ax.get_xticklabels(), rotation=0, ha='right')
         st.pyplot(fig)
+if selected == 'Data Scrapping':
+    st.title('Data Scrapping')
+    scrapping_intro_md = '''
+    This page show the source code of the webscraper utilized to obtain the data.
+    * __Source:__ https://tinyurl.com/pad-covid-dataset
+    * __Library Used:__ Selenium'''
+    st.markdown(scrapping_intro_md)
+    scrapping_sourcecode = '''
+    from selenium import webdriver
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver import ActionChains
+    from selenium.common.exceptions import StaleElementReferenceException
+    from selenium.webdriver.support import expected_conditions as EC
+    import pandas as pd
+    import time
+
+    driver = webdriver.Chrome()
+    driver.get("https://dane.gov.pl/pl/dataset/2582,statystyki-zakazen-i-zgonow-z-powodu-covid-19-z-uwzglednieniem-zaszczepienia-przeciw-covid-19/resource/36897/table?page=1&per_page=20&q=&sort=")
+
+    # Define a function to get all elements on the page
+    def get_all_elements():
+        return driver.find_elements(By.XPATH, "//*")
+
+    # Display information about each element found
+    def display_element_info(element):
+        print("Tag Name:", element.tag_name)
+        print("Text:", element.text)
+        print("Attribute 'id':", element.get_attribute("id"))
+        print("Attribute 'class':", element.get_attribute("class"))
+        print("------------")
+
+    # Find all elements on the page and store them in a variable
+    all_elements = get_all_elements()
+
+    # Display information about each element found
+    for element in all_elements:
+        try:
+            display_element_info(element)
+        except StaleElementReferenceException:
+            # If the element is stale, refind it and display its information
+            all_elements = get_all_elements()
+            for refreshed_element in all_elements:
+                if refreshed_element == element:
+                    display_element_info(refreshed_element)
+
+    try:
+        cookie_popup = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "modal-content"))
+        )
+        # Once the cookie consent popup is found, click the accept button
+        close_button = cookie_popup.find_element(By.ID, "footer-close")
+        close_button.click()
+
+    except:
+        # If the cookie popup doesn't appear, continue without accepting cookies
+        print("No cookie consent popup found or it took too long to appear.")
+
+    data = []  # Scraped data goes here
+    wait = WebDriverWait(driver, 10)
+    table_page_number = 7  # Init index of the "next page button". It increases up to 11
+
+    for page_number in range(1, 495):  # Feel free to lower the upper bound for testing
+        table = wait.until(
+            EC.presence_of_element_located((By.CLASS_NAME, "datagrid")))  # Wait for table to appear on page
+
+        if page_number == 1:  # Get columns names
+            header_row = table.find_element(By.XPATH,
+                        "/html/body/app-root/app-main-layout/main/app-dataset-parent/div/app-dataset-resource/section/div[4]/div[2]/app-resource-table-no-filters/div/div[3]/div/table/thead/tr")
+            columns_names = [th.text for th in header_row.find_elements(By.CLASS_NAME, "datagrid__heading")]
+        rows = table.find_elements(By.XPATH, ".//tbody/tr")
+        for row in rows:
+            cells = row.find_elements(By.XPATH, "./td")
+            row_data = [cell.text for cell in cells]  # Get text from cell
+            data.append(row_data)
+
+        # Wait until the "next button" (it's an arrow tho) is present on the page
+        next_button = wait.until(EC.presence_of_element_located((By.XPATH,
+                    f"/html/body/app-root/app-main-layout/main/app-dataset-parent/div/app-dataset-resource/section/div[4]/div[2]/app-resource-table-no-filters/div/div[4]/div/app-pagination/nav/div/ul/li[{table_page_number}]/a")))
+        if table_page_number < 11:
+            table_page_number += 1
+
+        actions = ActionChains(
+            driver)  # ActionChains instead of regular CLICK because for some reason CLICK turned out to be a bit more buggy
+        actions.move_to_element(next_button).click().perform()
+        # Let the page load after clicking
+        time.sleep(4)
+
+    driver.quit()
+    df.to_csv('covid_dataset.csv')'''
+    st.code(scrapping_sourcecode, language='python')
+if selected == 'Models':
+    st.title('Models')
+    st.title('!!!!!!!!!!!!!!!TODO!!!!!!!!!!!!!!!!')
