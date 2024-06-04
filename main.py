@@ -36,8 +36,8 @@ selected = None
 with st.sidebar:
     selected = option_menu(
         menu_title='Navigation',
-        options=['Home', 'Original Dataset', 'Processed Dataset', 'Data Scrapping', 'Models'],
-        icons=['house', 'database', 'database-check', 'cloud-download', 'diagram-3'],
+        options=['Home', 'Data Scrapping', 'Original Dataset', 'Processed Dataset', 'Modeling'],
+        icons=['house', 'cloud-download', 'database', 'database-check', 'diagram-3'],
         menu_icon='map',
         default_index=0
     )
@@ -121,7 +121,7 @@ if selected == 'Original Dataset':
     fig, ax = plt.subplots(figsize=(8, 6))
     sns.barplot(data=df_aggregated, x='infection_number', y='number_of_reported_cases', hue='infection_number', ax=ax)
     ax.set_title('Total Number of Reported Cases by Infection Number')
-    ax.set_xlabel('Had COVID Before?')
+    ax.set_xlabel('Infection number')
     ax.set_ylabel('Total Number of Reported Cases')
     ax.legend([], frameon=False)
     st.pyplot(fig)
@@ -190,16 +190,23 @@ if selected == 'Processed Dataset':
         st.code(infections_code, language='python')
         st.header('Encoding and missing data handling')
         encoding_code = '''
+        df_encoded = pd.get_dummies(df, columns=['gender'], drop_first=True)
+        df_encoded = pd.get_dummies(df_encoded, columns=['age_group'], drop_first=False)
         df_encoded = pd.get_dummies(df, columns=['manufacturer'], drop_first=False)
-        df_encoded['dose'].fillna('unvaccinated', inplace=True)'''
+        df_encoded['dose'].fillna('unvaccinated', inplace=True)
+        df_encoded = pd.get_dummies(df_encoded, columns=['dose'], drop_first=True)'''
         st.code(encoding_code, language='python')
         st.write('Rows without value of dawka_ost also do not have any value for vaccine manufacturer meaning that '
                 'the reported group was not vaccinated, thus the missing values were filled with appropriate label.')
         st.header('Grouping rows with same values into a single row with number_of_reported_cases equal to the sum of individual cases in the repeating rows')
-        grouping_code = '''df_encoded_grouped = df_encoded.groupby([
-        'voivodeship', 'county', 'age_group', 'gender', 'dose',
-        'multiple_infections', 'manufacturer_Astra Zeneca', 'manufacturer_Johnson&Johnson',
-        'manufacturer_Moderna', 'manufacturer_Pfizer'],
+        grouping_code = '''
+        df_encoded_grouped = df_encoded.groupby([
+            'voivodeship', 'county', 'multiple_infections', 'gender_male',
+            'age_group_0-18', 'age_group_19-24', 'age_group_25-34', 'age_group_35-44', 
+            'age_group_45-54', 'age_group_55-64', 'age_group_65-74', 'age_group_75-84', 
+            'age_group_85-94', 'age_group_95+', 'manufacturer_Astra Zeneca', 
+            'manufacturer_Johnson&Johnson', 'manufacturer_Moderna', 'manufacturer_Pfizer',
+            'dose_booster', 'dose_full', 'dose_single', 'dose_unvaccinated'],
         as_index=False)['number_of_reported_cases'].sum()'''
         st.code(grouping_code, language='python')
         st.header('Processing summary: ')
@@ -209,25 +216,48 @@ if selected == 'Processed Dataset':
         * The number of rows went down from 9764 to 6504.
         * At the same time the max value of number_of_reported_cases in a single report went up from 12 to 57 indicating a
         large number of cases that shared the same attributes but were reported individually.
-        * Despite removing some of the columns, the number of them did not change due to additional columns added with encoding.'''
+        * Despite removing some of the columns, the number of them increased due to additional columns added with encoding.'''
         st.markdown(grouping_summary_md)
     else:
         st.header('Processed data visualization')
         # Age distribution
-        age_group_cases = df_processed.groupby('age_group')['number_of_reported_cases'].sum().reset_index()
-        fig, ax = plt.subplots(figsize=(8, 4))
-        sns.barplot(data=age_group_cases, x='age_group', y='number_of_reported_cases', hue='age_group', ax=ax)
+        age_group_map = {
+            (True, False, False, False, False, False, False, False, False, False): '0-18',
+            (False, True, False, False, False, False, False, False, False, False): '19-24',
+            (False, False, True, False, False, False, False, False, False, False): '25-34',
+            (False, False, False, True, False, False, False, False, False, False): '35-44',
+            (False, False, False, False, True, False, False, False, False, False): '45-54',
+            (False, False, False, False, False, True, False, False, False, False): '55-64',
+            (False, False, False, False, False, False, True, False, False, False): '65-74',
+            (False, False, False, False, False, False, False, True, False, False): '75-84',
+            (False, False, False, False, False, False, False, False, True, False): '85-94',
+            (False, False, False, False, False, False, False, False, False, True): '95+'
+        }
+        df_aggregated = df_processed.groupby([
+            'age_group_0-18', 'age_group_19-24', 'age_group_25-34', 'age_group_35-44',
+            'age_group_45-54', 'age_group_55-64', 'age_group_65-74', 'age_group_75-84',
+            'age_group_85-94', 'age_group_95+'])['number_of_reported_cases'].sum()
+        df_aggregated.index = df_aggregated.index.map(age_group_map)
+        fig, ax = plt.subplots(figsize=(10, 6))
+        df_aggregated.plot(kind='bar', ax=ax)
         ax.set_title('Distribution of Reported Cases by Age Group')
         ax.set_xlabel('Age Group')
         ax.set_ylabel('Number of Reported Cases')
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
         st.pyplot(fig)
         # Gender distribution
-        gender_cases = df_processed.groupby('gender')['number_of_reported_cases'].sum().reset_index()
-        fig, ax = plt.subplots(figsize=(8, 4))
-        sns.barplot(data=gender_cases, x='gender', y='number_of_reported_cases', hue='gender', ax=ax)
+        gender_map = {
+            False: 'Female',
+            True: 'Male',
+        }
+        df_aggregated = df_processed.groupby(['gender_male'])['number_of_reported_cases'].sum()
+        df_aggregated.index = df_aggregated.index.map(gender_map)
+        fig, ax = plt.subplots(figsize=(10, 6))
+        df_aggregated.plot(kind='bar', ax=ax)
         ax.set_title('Distribution of Reported Cases by Gender')
         ax.set_xlabel('Gender')
         ax.set_ylabel('Number of Reported Cases')
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=0)
         st.pyplot(fig)
         # Multiple infections plot
         df_aggregated = df_processed.groupby('multiple_infections')['number_of_reported_cases'].sum().reset_index()
@@ -349,6 +379,6 @@ if selected == 'Data Scrapping':
     driver.quit()
     df.to_csv('covid_dataset.csv')'''
     st.code(scrapping_sourcecode, language='python')
-if selected == 'Models':
-    st.title('Models')
+if selected == 'Modeling':
+    st.title('Modeling')
     st.title('!!!!!!!!!!!!!!!TODO!!!!!!!!!!!!!!!!')
