@@ -1,3 +1,4 @@
 geopandas
 seaborn
 streamlit_option_menu
+scikit-learn
