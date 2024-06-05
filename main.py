@@ -318,6 +318,7 @@ if selected == 'Processed Dataset':
         ax.set_ylabel('Number of Reported Cases')
         ax.set_xticklabels(ax.get_xticklabels(), rotation=0, ha='right')
         st.pyplot(fig)
+        
 if selected == 'Data Scraping':
     st.title('Data Scraping')
     scraping_intro_md = '''
@@ -364,6 +365,8 @@ if selected == 'Data Scraping':
                 if refreshed_element == element:
                     display_element_info(refreshed_element)
 
+    time.sleep(5)
+
     try:
         cookie_popup = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CLASS_NAME, "modal-content"))
@@ -376,11 +379,13 @@ if selected == 'Data Scraping':
         # If the cookie popup doesn't appear, continue without accepting cookies
         print("No cookie consent popup found or it took too long to appear.")
 
+    time.sleep(5)
+
     data = []  # Scraped data goes here
     wait = WebDriverWait(driver, 10)
     table_page_number = 7  # Init index of the "next page button". It increases up to 11
 
-    for page_number in range(1, 495):  # Feel free to lower the upper bound for testing
+    for page_number in range(1, 498):  # Feel free to lower the upper bound for testing
         table = wait.until(
             EC.presence_of_element_located((By.CLASS_NAME, "datagrid")))  # Wait for table to appear on page
 
@@ -404,11 +409,13 @@ if selected == 'Data Scraping':
             driver)  # ActionChains instead of regular CLICK because for some reason CLICK turned out to be a bit more buggy
         actions.move_to_element(next_button).click().perform()
         # Let the page load after clicking
-        time.sleep(4)
+        time.sleep(5)
 
     driver.quit()
+
     df.to_csv('covid_dataset.csv')'''
     st.code(scraping_sourcecode, language='python')
+
 if selected == 'Modeling':
     st.title('Modeling')
     st.write('This page shows the machine learning modeling and evaluation process.')
@@ -738,7 +745,7 @@ if selected == 'Modeling':
         )
         st.dataframe(bayesian_ridge_eval, use_container_width=True)
 
-    elif modeling_page_option == 'Poisson Regression':
+    if modeling_page_option == 'Poisson Regression':
         st.header('Poisson Regression')
         # Model
         X = df_processed.drop(columns=['number_of_reported_cases'])
