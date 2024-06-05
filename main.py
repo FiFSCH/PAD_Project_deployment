@@ -6,6 +6,23 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+import numpy as np
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.tree import DecisionTreeRegressor, plot_tree, export_text
+from sklearn.ensemble import BaggingRegressor, RandomForestRegressor, GradientBoostingRegressor
+from sklearn.linear_model import Ridge, BayesianRidge, PoissonRegressor
+from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_poisson_deviance
+
+# Function for positioning home image
+def set_image_position():
+    st.write("""
+    <style>
+        .stApp {
+            padding-top: 4rem;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
 # Data loading
 df_og = pd.read_csv('covid_dataset.csv')
 df_processed = pd.read_csv('covid_dataset_processed.csv')
@@ -36,7 +53,7 @@ selected = None
 with st.sidebar:
     selected = option_menu(
         menu_title='Navigation',
-        options=['Home', 'Data Scrapping', 'Original Dataset', 'Processed Dataset', 'Modeling'],
+        options=['Home', 'Data Scraping', 'Original Dataset', 'Processed Dataset', 'Modeling'],
         icons=['house', 'cloud-download', 'database', 'database-check', 'diagram-3'],
         menu_icon='map',
         default_index=0
@@ -44,11 +61,19 @@ with st.sidebar:
 
 # Content on the pages
 if selected == 'Home':
-    st.title('TUTAJ NAZWA PROJEKTU')
+    st.title('COVID-19: Prediction of reported cases based on vaccination and demographic details')
+    set_image_position()
     with st.columns(3)[1]:
         st.image('Covid19.png', width=240)
-    st.header('Goal of the Project:')
-    st.write('Olu proszę napisz tutaj ładny goal projektu bo jesteś lepsza w pisaniu.')
+    st.header('Summary:')
+    goal_text = '''
+    The goal of this project was to predict the number of reported COVID-19 cases based on vaccination details and demographic information (e.g. age group) with the use of machine learning techniques. 
+   
+    The exploratory analysis and visualization of data allowed for a more in-depth understanding of the topic, to which the original data was processed accordingly.
+    
+    A comparative analysis of multiple regression models revealed the strengths and weaknesses of the chosen approach, with implications for further development that could ultimately benefit research in the medical field.
+    '''
+    st.write(goal_text)
     st.header('Authors:')
     authors_list_md = '''
     * Hien Anh Nguyen, s22192  
@@ -64,6 +89,9 @@ if selected == 'Home':
     * Streamlit + streamlit_option_menu
     * Selenium
     * Statsmodels
+    * Numpy
+    * Scikit-learn
+    * Pickle
     '''
     st.markdown(libraries_list_md)
 
@@ -163,13 +191,15 @@ if selected == 'Original Dataset':
 
 if selected == 'Processed Dataset':
     st.title('Processed Dataset')
-    st.write('This page show the step-by-step process of data preparation. It includes the visualization of the outcome.')
+    st.write('This page shows the step-by-step process of data preparation. It includes the visualization of the outcome.')
     st.dataframe(df_processed)
     processed_data_page_option = st.radio('', ('Data exploration + processing', 'Visualization'), horizontal=True)
     if processed_data_page_option == 'Data exploration + processing':
         st.header('Basic Data Exploration + Processing')
         st.markdown('### Sum of missing values for each column:')
-        st.write(df_og.isnull().sum())
+        #st.write(df_og.isnull().sum(), width=100)
+        missing_values_df = df_og.isna().sum().rename_axis('Column').reset_index()
+        st.table(missing_values_df)
         st.header('Replacing/dropping rows with unknown values and removal of unnecessary columns')
         st.markdown('__Unique values of age_group:__ [0-18, 25-34, 35-44, 45-54, 55-64, 65-74, 19-24, 75-84, 85-94, BD, 95+]')
         st.markdown('__Unique values of gender:__  [female, male, nieznana]')
@@ -288,14 +318,14 @@ if selected == 'Processed Dataset':
         ax.set_ylabel('Number of Reported Cases')
         ax.set_xticklabels(ax.get_xticklabels(), rotation=0, ha='right')
         st.pyplot(fig)
-if selected == 'Data Scrapping':
-    st.title('Data Scrapping')
-    scrapping_intro_md = '''
-    This page show the source code of the webscraper utilized to obtain the data.
+if selected == 'Data Scraping':
+    st.title('Data Scraping')
+    scraping_intro_md = '''
+    This page shows the source code of the webscraper utilized to obtain the data.
     * __Source:__ https://tinyurl.com/pad-covid-dataset
     * __Library Used:__ Selenium'''
-    st.markdown(scrapping_intro_md)
-    scrapping_sourcecode = '''
+    st.markdown(scraping_intro_md)
+    scraping_sourcecode = '''
     from selenium import webdriver
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.common.by import By
@@ -378,7 +408,373 @@ if selected == 'Data Scrapping':
 
     driver.quit()
     df.to_csv('covid_dataset.csv')'''
-    st.code(scrapping_sourcecode, language='python')
+    st.code(scraping_sourcecode, language='python')
 if selected == 'Modeling':
     st.title('Modeling')
-    st.title('!!!!!!!!!!!!!!!TODO!!!!!!!!!!!!!!!!')
+    st.write('This page shows the machine learning modeling and evaluation process.')
+    overview_text = '''
+    This analysis compares the performance of various regression models for predicting the number of reported Covid cases based on vaccination and demographic details in the Polish e-Health Centre (Centrum e-Zdrowia) data.
+    '''
+    data_prep_text = '''
+    **Defining feature set and target variable**
+    ```python
+    X = df_processed.drop(columns=['number_of_reported_cases'])
+    y = df_processed.number_of_reported_cases
+    ```
+    **Train and test set data splitting**
+    ```python
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    ```
+    '''
+    metrics_text = '''
+    - Mean Absolute Error (MAE)
+    - Mean Squared Error (MSE)
+    - Cross-Validation Mean Squared Error (CV-MSE)
+    - Deviance (for Poisson Regression)
+    '''
+    consid_text = '''
+    **Balance between Accuracy and Generalizability**: Random Forest and Decision Tree with Bootstrap Aggregation appear to be good initial choices due to their balance between MAE and CV-MSE.
+    
+    **Prioritize Generalizability**: If generalizability to unseen data is crucial, Gradient Boosting might be a good option despite its slightly higher MAE.
+    
+    **Overfitting Concerns**: Ridge Regressors can be considered if overfitting is a major concern, but be aware of the potential sacrifice in capturing the true relationships.
+    
+    **Count Data Specific Model**: Poisson Regression offers a statistically sound approach for count data and provides interpretable results, making it a valuable model to consider.
+    '''
+    further_dev_text = '''
+    Explore feature engineering techniques like combining similar categories to potentially improve model performance for all models.
+    
+    Consider hyperparameter tuning for promising models (Random Forest, Gradient Boosting) to see if accuracy can be further improved.
+    
+    Validate the chosen model(s) on a separate hold-out dataset to ensure their generalizability to unseen data.
+    
+    For Poisson Regression, explore the estimated coefficients to understand how vaccination details influence the predicted number of cases.
+    '''
+    with st.expander("Overview"):
+        st.write(overview_text)
+    with st.expander("Data Preparation"):
+        st.write(data_prep_text)
+    with st.expander("Evaluation Metrics"):
+        st.write(metrics_text)
+    with st.expander("Considerations"):
+        st.write(consid_text)
+    with st.expander("Further Development"):
+        st.write(further_dev_text)
+    st.markdown("""<hr style="height:4px;border:none;color:#7C7C7C;background-color:#7C7C7C;" /> """, unsafe_allow_html=True)
+    
+    modeling_page_option = st.radio('', ('Decision Tree-Based Models', 'Gradient Boosting Regression', 'Ridge Regression', 'Poisson Regression'), horizontal=True)
+    if modeling_page_option == 'Decision Tree-Based Models':
+        st.header('Decision Tree-Based Models')
+        summary_text = '''
+        These models (Base Decision Tree, Decision Tree with Bootstrap Aggregation, Decision Tree with Pruning, Random Forest) are effective for handling categorical data like vaccine manufacturer and dose.
+        Their performance (MAE around 0.75) suggests they capture the general trend of cases within age groups. However, some of them can be prone to overfitting.
+        '''
+        st.write(summary_text)
+        # Base DT
+        st.markdown('### Base Decision Tree Regressor')
+        st.markdown('#### Modeling')
+        base_regr_code = '''
+        # Initialize the Decision Tree Regressor
+        base_regr = DecisionTreeRegressor(random_state=42)
+
+        # Train the model
+        base_regr.fit(X_train, y_train)
+
+        # Make predictions on the testing data
+        y_pred_base = base_regr.predict(X_test)
+        '''
+        st.code(base_regr_code, language='python')
+
+        st.markdown('#### Evaluation')
+        # Model
+        X = df_processed.drop(columns=['number_of_reported_cases'])
+        y = df_processed.number_of_reported_cases
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        base_regr = DecisionTreeRegressor(random_state=42)
+        base_regr.fit(X_train, y_train)
+        y_pred_base = base_regr.predict(X_test)
+        # Evaluation
+        mae_base = mean_absolute_error(y_test, y_pred_base)
+        mse_base = mean_squared_error(y_test, y_pred_base)
+        cv_scores = cross_val_score(base_regr, X, y, cv=5, scoring='neg_mean_squared_error')
+        mean_cv_score = -np.mean(cv_scores)
+        base_regr_eval = pd.DataFrame(
+            [
+                {"Metric": "MAE", "Value": mae_base},
+                {"Metric": "MSE", "Value": mse_base},
+                {"Metric": "CV-MSE", "Value": mean_cv_score},
+            ]
+        )
+        st.dataframe(base_regr_eval, use_container_width=True)
+
+        # Bagging DT
+        st.markdown('### Decision Tree Regressor with Bootstrap Aggregation (Bagging)')
+        st.markdown('#### Modeling')
+        bagging_regr_code = '''
+        # Initialize the Bagging Regressor with the base Decision Tree Regressor
+        bagging_regr = BaggingRegressor(estimator=base_regr, n_estimators=100, random_state=42)
+
+        # Train the bagging model on the training data
+        bagging_regr.fit(X_train, y_train)
+
+        # Make predictions on the testing data
+        y_pred_bagging = bagging_regr.predict(X_test)
+        '''
+        st.code(bagging_regr_code, language='python')
+
+        st.markdown('#### Evaluation')
+        # Model
+        bagging_regr = BaggingRegressor(estimator=base_regr, n_estimators=100, random_state=42)
+        bagging_regr.fit(X_train, y_train)
+        y_pred_bagging = bagging_regr.predict(X_test)
+        # Evaluation
+        mae_bagging = mean_absolute_error(y_test, y_pred_bagging)
+        mse_bagging = mean_squared_error(y_test, y_pred_bagging)
+        cv_scores = cross_val_score(bagging_regr, X, y, cv=5, scoring='neg_mean_squared_error')
+        mean_cv_score = -np.mean(cv_scores)
+        bagging_regr_eval = pd.DataFrame(
+            [
+                {"Metric": "MAE", "Value": mae_bagging},
+                {"Metric": "MSE", "Value": mse_bagging},
+                {"Metric": "CV-MSE", "Value": mean_cv_score},
+            ]
+        )
+        st.dataframe(bagging_regr_eval, use_container_width=True)
+
+        # Pruned DT
+        st.markdown('### Decision Tree Regressor with Pruning')
+        st.markdown('#### Modeling')
+        pruned_regr_code = '''
+        # Initialize the Decision Tree Regressor with pruning parameters
+        pruned_regr = DecisionTreeRegressor(
+            max_depth=5,            # Maximum depth of the tree
+            min_samples_split=10,   # Minimum number of samples required to split an internal node
+            min_samples_leaf=5,     # Minimum number of samples required to be at a leaf node
+            max_leaf_nodes=20,      # Maximum number of leaf nodes
+            random_state=42
+        )
+
+        # Train the model on the training data
+        pruned_regr.fit(X_train, y_train)
+
+        # Make predictions on the testing data
+        y_pred_pruned = pruned_regr.predict(X_test)
+        '''
+        st.code(pruned_regr_code, language='python')
+
+        st.markdown('#### Evaluation')
+        # Model
+        pruned_regr = DecisionTreeRegressor(
+            max_depth=5,               # Maximum depth of the tree
+            min_samples_split=10,      # Minimum number of samples required to split an internal node
+            min_samples_leaf=5,        # Minimum number of samples required to be at a leaf node
+            max_leaf_nodes=20,         # Maximum number of leaf nodes
+            random_state=42
+        )
+        pruned_regr.fit(X_train, y_train)
+        y_pred_pruned = pruned_regr.predict(X_test)
+        # Evaluation
+        mae_pruned = mean_absolute_error(y_test, y_pred_pruned)
+        mse_pruned = mean_squared_error(y_test, y_pred_pruned)
+        cv_scores = cross_val_score(pruned_regr, X, y, cv=5, scoring='neg_mean_squared_error')
+        mean_cv_score = -np.mean(cv_scores)
+        pruned_regr_eval = pd.DataFrame(
+            [
+                {"Metric": "MAE", "Value": mae_pruned},
+                {"Metric": "MSE", "Value": mse_pruned},
+                {"Metric": "CV-MSE", "Value": mean_cv_score},
+            ]
+        )
+        st.dataframe(pruned_regr_eval, use_container_width=True)
+
+        st.markdown('#### Visualization')
+        fig, ax = plt.subplots(figsize=(12, 6))  # Adjust width and height as needed
+        plot_tree(pruned_regr, ax=ax, filled=True, feature_names=X.columns, rounded=True)
+        st.pyplot(fig)
+
+        # Random Forest
+        st.markdown('### Random Forest Regressor')
+        st.markdown('#### Modeling')
+        rf_code = '''
+        # Fit Random Forest regression model
+        rf = RandomForestRegressor(n_estimators=100, random_state=42)
+        rf.fit(X_train, y_train)
+
+        # Predict on the testing set
+        y_pred_rf = rf.predict(X_test)
+        '''
+        st.code(rf_code, language='python')
+        
+        st.markdown('#### Evaluation')
+        # Model
+        rf = RandomForestRegressor(n_estimators=100, random_state=42)
+        rf.fit(X_train, y_train)
+        y_pred_rf = rf.predict(X_test)
+        # Evaluation
+        mae_rf = mean_absolute_error(y_test, y_pred_rf)
+        mse_rf = mean_squared_error(y_test, y_pred_rf)
+        cv_mse = cross_val_score(rf, X, y, scoring='neg_mean_squared_error', cv=5)
+        mean_cv_score = -np.mean(cv_scores)
+        rf_eval = pd.DataFrame(
+            [
+                {"Metric": "MAE", "Value": mae_rf},
+                {"Metric": "MSE", "Value": mse_rf},
+                {"Metric": "CV-MSE", "Value": mean_cv_score},
+            ]
+        )
+        st.dataframe(rf_eval, use_container_width=True)
+
+    if modeling_page_option == 'Gradient Boosting Regression':
+        st.header('Gradient Boosting Regression')
+        # Model
+        X = df_processed.drop(columns=['number_of_reported_cases'])
+        y = df_processed.number_of_reported_cases
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        gbr = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
+        gbr.fit(X_train, y_train)
+        y_pred_gbr = gbr.predict(X_test)
+        # Evaluation
+        mae_gbr = mean_absolute_error(y_test, y_pred_gbr)
+        mse_gbr = mean_squared_error(y_test, y_pred_gbr)
+        cv_scores = cross_val_score(gbr, X, y, cv=5, scoring='neg_mean_squared_error')
+        mean_cv_score = -np.mean(cv_scores)
+        summary_text = f'''
+        This model can achieve good performance on complex relationships like those between vaccination details and cases.
+        
+        Its MAE (around {mae_gbr:.2f}) is slightly higher than some decision tree models, but its lower CV-MSE suggests it might generalize better to unseen data.
+        '''
+        st.write(summary_text)
+        st.markdown('### Gradient Boosting Regressor')
+        st.markdown('#### Modeling')
+        gbr_code = '''
+        # Fit Gradient Boosting regression model
+        gbr = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
+        gbr.fit(X_train, y_train)
+
+        # Predict on the testing set
+        y_pred_gbr = gbr.predict(X_test)
+        '''
+        st.code(gbr_code, language='python')
+        st.markdown('#### Evaluation')       
+        gbr_eval = pd.DataFrame(
+            [
+                {"Metric": "MAE", "Value": mae_gbr},
+                {"Metric": "MSE", "Value": mse_gbr},
+                {"Metric": "CV-MSE", "Value": mean_cv_score},
+            ]
+        )
+        st.dataframe(gbr_eval, use_container_width=True)
+
+    if modeling_page_option == 'Ridge Regression':
+        st.header('Ridge Regression')
+        summary_text = '''
+        These models focus on reducing model complexity and overfitting.
+
+        While they have lower CV-MSE (potentially less overfitting), their higher MAE suggests they might under-capture the intricacies of the data.
+        '''
+        st.write(summary_text)
+        # Ridge
+        st.markdown('### Ridge Regressor')
+        st.markdown('#### Modeling')
+        ridge_code = '''
+        # Fit Ridge regression model
+        ridge = Ridge(alpha=1.0)
+        ridge.fit(X_train, y_train)
+
+        # Predict on the testing set
+        y_pred_ridge = ridge.predict(X_test)
+        '''
+        st.code(ridge_code, language='python')
+        st.markdown('#### Evaluation')
+        # Model
+        X = df_processed.drop(columns=['number_of_reported_cases'])
+        y = df_processed.number_of_reported_cases
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        ridge = Ridge(alpha=1.0)
+        ridge.fit(X_train, y_train)
+        y_pred_ridge = ridge.predict(X_test)
+        # Evaluation
+        mae_ridge = mean_absolute_error(y_test, y_pred_ridge)
+        mse_ridge = mean_squared_error(y_test, y_pred_ridge)
+        cv_scores = cross_val_score(ridge, X, y, cv=5, scoring='neg_mean_squared_error')
+        mean_cv_score = -np.mean(cv_scores)
+        ridge_eval = pd.DataFrame(
+            [
+                {"Metric": "MAE", "Value": mae_ridge},
+                {"Metric": "MSE", "Value": mse_ridge},
+                {"Metric": "CV-MSE", "Value": mean_cv_score},
+            ]
+        )
+        st.dataframe(ridge_eval, use_container_width=True)
+
+        # Bayesian Ridge
+        st.markdown('### Bayesian Ridge Regressor')
+        st.markdown('#### Modeling')
+        bayesian_ridge_code = '''
+        # Fit Bayesian Ridge regression model
+        bayesian_ridge = BayesianRidge()
+        bayesian_ridge.fit(X_train, y_train)
+
+        # Predict on the testing set
+        y_pred_bayesian_ridge = bayesian_ridge.predict(X_test)
+        '''
+        st.code(bayesian_ridge_code, language='python')
+        st.markdown('#### Evaluation')
+        # Model
+        bayesian_ridge = BayesianRidge()
+        bayesian_ridge.fit(X_train, y_train)
+        y_pred_bayesian_ridge = bayesian_ridge.predict(X_test)
+        # Evaluation
+        mae_bayesian_ridge = mean_absolute_error(y_test, y_pred_bayesian_ridge)
+        mse_bayesian_ridge = mean_squared_error(y_test, y_pred_bayesian_ridge)
+        cv_scores = cross_val_score(bayesian_ridge, X, y, cv=5, scoring='neg_mean_squared_error')
+        mean_cv_score = -np.mean(cv_scores)
+        bayesian_ridge_eval = pd.DataFrame(
+            [
+                {"Metric": "MAE", "Value": mae_bayesian_ridge},
+                {"Metric": "MSE", "Value": mse_bayesian_ridge},
+                {"Metric": "CV-MSE", "Value": mean_cv_score},
+            ]
+        )
+        st.dataframe(bayesian_ridge_eval, use_container_width=True)
+
+    elif modeling_page_option == 'Poisson Regression':
+        st.header('Poisson Regression')
+        # Model
+        X = df_processed.drop(columns=['number_of_reported_cases'])
+        y = df_processed.number_of_reported_cases
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        poisson = PoissonRegressor(max_iter=500)
+        poisson.fit(X_train, y_train)
+        y_pred_poisson = poisson.predict(X_test)
+        # Evaluation
+        mae_poisson = mean_absolute_error(y_test, y_pred_poisson)
+        mse_poisson = mean_squared_error(y_test, y_pred_poisson)
+        dev_poisson = mean_poisson_deviance(y_test, y_pred_poisson)
+        summary_text = f'''
+        This is a statistical model specifically designed for count data like the number of Covid cases.
+        
+        Its MAE ({mae_poisson:.2f}) is higher than some tree-based models, but its Deviance ({dev_poisson:.2f}) is a relevant metric for evaluating goodness-of-fit in Poisson Regression. It directly models the probability distribution of case occurrences.
+        '''
+        st.write(summary_text)
+        st.markdown('### Poisson Regressor')
+        st.markdown('#### Modeling')
+        poisson_code = '''
+        # Fit Poisson Regression Model
+        poisson = PoissonRegressor(max_iter=500)
+        poisson.fit(X_train, y_train)
+
+        # Predict on the testing set
+        y_pred_poisson = poisson.predict(X_test)
+        '''
+        st.code(poisson_code, language='python')
+        st.markdown('#### Evaluation')
+
+        poisson_eval = pd.DataFrame(
+            [
+                {"Metric": "MAE", "Value": mae_poisson},
+                {"Metric": "MSE", "Value": mse_poisson},
+                {"Metric": "Deviance", "Value": dev_poisson},
+            ]
+        )
+        st.dataframe(poisson_eval, use_container_width=True)
