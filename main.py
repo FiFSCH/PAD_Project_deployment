@@ -440,7 +440,7 @@ if selected == 'Modeling':
     - Deviance (for Poisson Regression)
     '''
     consid_text = '''
-    **Balance between Accuracy and Generalizability**: Random Forest and Decision Tree with Bootstrap Aggregation appear to be good initial choices due to their balance between MAE and CV-MSE.
+    **Balance between Prediction Error Measures and Generalizability**: Random Forest and Decision Tree with Bootstrap Aggregation appear to be good initial choices due to their balance between MAE and CV-MSE.
     
     **Prioritize Generalizability**: If generalizability to unseen data is crucial, Gradient Boosting might be a good option despite its slightly higher MAE.
     
